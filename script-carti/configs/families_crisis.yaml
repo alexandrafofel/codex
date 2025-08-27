@@ -1,0 +1,15 @@
+book_title: Families Crisis and Caring
+pdf_file: input/families_crisis.pdf
+lang: eng
+embed_images: auto        # auto | all | none
+dpi: 400
+preprocess: pil_gray      # <— noul profil (grayscale, fără binarizare)
+tess_psm: 3
+min_chars: 120            # sub atât -> considerăm pagina slabă (embed-only)
+low_conf: 55              # sub atât -> considerăm pagina slabă (embed-only)
+
+split_strategy:
+  - page: 1
+    type: single
+  - page: 2-300
+    type: double
