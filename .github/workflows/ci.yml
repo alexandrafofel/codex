@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feature/ocrmd-v2"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng poppler-utils
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Lint with ruff
+        run: ruff src/ocrmd scripts
+
+      - name: Type check with mypy
+        run: mypy src/ocrmd
+
+      - name: Run tests
+        run: pytest
+
+      - name: Sample OCR (if inputs exist)
+        run: |
+          set -e
+          # process first config and PDF if present
+          config=$(ls configs/*.yaml | head -n1 || true)
+          pdf=$(ls input/*.pdf | head -n1 || true)
+          if [ -n "$config" ] && [ -n "$pdf" ]; then
+            ocrmd all -c "$config" -o output
+          else
+            echo "No input PDF found, skipping sample OCR."
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ocr-output
+          path: output

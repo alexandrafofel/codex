@@ -1,0 +1,17 @@
+book_title: Families Crisis and Caring
+pdf_file: input/families_crisis.pdf
+lang: eng
+dpi: 400
+
+preprocess: pil_gray          # pil_gray | pil_bin | opencv
+tess_psm: 6                   # PSM global; engine tests also 3/4 and chooses best
+embed_images: auto            # auto | all | none
+crop_pct: 0.05                # 5% margins (gutter)
+low_conf: 50                  # conf < 50 => low-confidence
+min_chars: 100                # <100 characters => low-confidence
+
+split_strategy:
+  - page: 1
+    type: single
+  - page: 2-300
+    type: double

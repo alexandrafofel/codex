@@ -1,0 +1,35 @@
+[project]
+name = "ocrmd"
+version = "0.1.0"
+description = "OCR to Markdown pipeline"
+authors = [ { name = "Codex Team" } ]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pytesseract",
+    "pillow",
+    "tqdm",
+    "PyYAML",
+    "numpy",
+    "opencv-python-headless",
+    "pdf2image",
+    "pymupdf>=1.22.0",
+    "python-Levenshtein",
+    "matplotlib",
+]
+
+[project.scripts]
+ocrmd = "ocrmd.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "types-PyYAML",
+    "types-Pillow",
+]
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
