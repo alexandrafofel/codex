@@ -1,0 +1,18 @@
+book_title: Families Crisis and Caring (IMAGES)
+pdf_file: input/families_crisis.pdf
+lang: eng
+dpi: 400
+
+# Imagini fidele: fără binarizare agresivă, doar curățare ușoară
+preprocess: pil_gray        # grayscale blând; păstrează fotografiile
+tess_psm: 6                 # nu contează mult aici (vom ignora textul)
+embed_images: all           # inserează imaginea pentru fiecare pagină în MD
+crop_pct: 0.00              # nu tăia marginile
+low_conf: 999               # forțează să nu treacă niciun text
+min_chars: 10000            # forțează să nu treacă niciun text
+
+split_strategy:
+  - page: 1
+    type: single
+  - page: 2-300
+    type: double

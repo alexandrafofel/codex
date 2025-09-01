@@ -1,0 +1,17 @@
+pytesseract
+pillow
+tqdm
+PyYAML
+numpy
+opencv-python-headless
+pdf2image
+pymupdf>=1.22.0
+python-Levenshtein
+matplotlib
+
+[dev]
+ruff
+mypy
+pytest
+types-PyYAML
+types-Pillow

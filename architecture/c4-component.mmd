@@ -1,0 +1,115 @@
+%% C4 — Component detailed, cu 2 configuratii si functii cheie
+flowchart LR
+  %% Config files
+  CFGTXT["configs/families_crisis_text.yaml"]
+  CFGIMG["configs/families_crisis_images.yaml"]
+
+  %% CLI
+  subgraph CLI["cli.py - entrypoint"]
+    A1["parse_args<br/>def parse_args()"]
+    A2["main<br/>def main()"]
+    A3["cmd_pdf<br/>def cmd_pdf(args)"]
+    A4["cmd_split<br/>def cmd_split(args)"]
+    A5["cmd_ocr<br/>def cmd_ocr(args)"]
+    A6["cmd_md<br/>def cmd_md(args)"]
+    A7["cmd_all<br/>def cmd_all(args)"]
+    A8["feedback_loop<br/>Text Y N logic in 2 pasi"]
+  end
+
+  %% Config
+  subgraph CONFIG["config.py"]
+    C1["load_config<br/>citeste YAML si valideaza"]
+    C2["OcrConfig dataclass<br/>campuri si default-uri"]
+  end
+
+  %% PDF
+  subgraph PDF["pdf.py"]
+    P1["extract_pages<br/>PDF -> raw_pages<br/>PyMuPDF, fallback pdf2image"]
+    P2["_render_page_fitz<br/>rasterizare fitz"]
+    P3["_render_page_poppler<br/>rasterizare poppler"]
+  end
+
+  %% Split
+  subgraph SPLIT["split.py"]
+    S1["detect_gutter<br/>proiectie verticala, minime"]
+    S2["split_pages<br/>1/2/4 in 1 pe baza gutter"]
+    S3["auto_orient_deskew<br/>corectie usoara orientare"]
+  end
+
+  %% Preprocess
+  subgraph PRE["preprocess.py"]
+    R1["pil_gray<br/>crop optional, grayscale, unsharp, autocontrast"]
+    R2["pil_bin<br/>Otsu pt pagini curate"]
+    R3["opencv<br/>CLAHE, adaptive threshold, deskew mai agresiv"]
+  end
+
+  %% OCR
+  subgraph OCR["ocr.py"]
+    O1["run_ocr<br/>ruleaza multi PSM si selecteaza best by avg_conf"]
+    O2["_run_psm<br/>pytesseract image_to_data, conf si chars"]
+    O3["is_image_heavy<br/>heuristica pagini foto"]
+  end
+
+  %% Structure
+  subgraph STRU["structure.py"]
+    T1["detect_headings<br/>pe linii: inaltime relativa, centrare, pozitie"]
+    T2["segment_blocks<br/>heading body figure caption"]
+  end
+
+  %% Markdown
+  subgraph MD["markdown.py"]
+    M1["build_markdown<br/>compune MD pe pagina"]
+    M2["render_text_only<br/>fara imagini cand embed_images = none"]
+    M3["render_with_images<br/>insera imagini dupa strategie"]
+    M4["cleanup_text<br/>de-hyphen, join lines, spatii"]
+  end
+
+  %% QA
+  subgraph QA["qa.py"]
+    Q1["write_qa_csv<br/>page, conf, chars, psm, preprocess"]
+    Q2["eval_cer_wer<br/>Levenshtein vs gold"]
+    Q3["heading_f1<br/>precision recall F1 pe H1 H2 H3"]
+  end
+
+  %% FS layout
+  IN["input/*.pdf"]
+  RAW["output/<slug>/raw_pages"]
+  SPL["output/<slug>/split_pages"]
+  IMG["output/<slug>/markdown/img"]
+  MDTXT["output/<slug>/markdown/<slug>_TEXT.md"]
+  MDIMG["output/<slug>/markdown/<slug>_IMAGES.md"]
+
+  %% Flows
+  CFGTXTTXT[Text profile]:::ghost
+  CFGTXT --> C1
+  CFGIMG --> C1
+
+  IN --> P1 --> RAW
+  RAW --> S1 --> S2 --> SPL
+  SPL --> R1
+  SPL --> R2
+  SPL --> R3
+  R1 --> O1
+  R2 --> O1
+  R3 --> O1
+  O1 --> T1 --> T2 --> M1 --> MDTXT
+  M4 -. post proc .- M1
+
+  %% Branch imagini
+  SPL --> M3
+  M3 --> IMG --> MDIMG
+
+  %% CLI wiring
+  A2 --> A7 --> P1
+  A7 --> S2
+  A7 --> O1
+  A7 --> M1
+  A6 --> M1
+  A5 --> O1
+  A3 --> P1
+  A4 --> S2
+  A8 -->|Y| M3
+  A8 -->|N| stop[(stop)]
+
+  %% Styles
+  classDef ghost stroke-dasharray:3 3,fill:none,stroke:#999

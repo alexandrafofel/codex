@@ -1,0 +1,101 @@
+Metadata-Version: 2.4
+Name: ocrmd
+Version: 0.1.0
+Summary: OCR to Markdown pipeline
+Author: Codex Team
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: pytesseract
+Requires-Dist: pillow
+Requires-Dist: tqdm
+Requires-Dist: PyYAML
+Requires-Dist: numpy
+Requires-Dist: opencv-python-headless
+Requires-Dist: pdf2image
+Requires-Dist: pymupdf>=1.22.0
+Requires-Dist: python-Levenshtein
+Requires-Dist: matplotlib
+Provides-Extra: dev
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: types-PyYAML; extra == "dev"
+Requires-Dist: types-Pillow; extra == "dev"
+
+# Codex OCR → Markdown Pipeline
+
+This repository contains an OCR pipeline for converting scanned books into
+structured Markdown.  It was designed for high fidelity conversion of
+multi‑page PDFs where each page may contain one, two or four logical
+pages, and includes extensive preprocessing, multi‑PSM OCR with
+confidence voting, heading detection and quality assessment.
+
+## Getting Started
+
+The project is packaged as a Python module.  It requires Python 3.12 or
+later and depends on a number of third–party libraries such as
+PyMuPDF, Pillow, OpenCV and Tesseract.  The required dependencies are
+declared in the `pyproject.toml` file so they can be installed via
+`pip`:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+```
+
+### Installing Tesseract and Poppler
+
+The pipeline relies on external binaries for OCR and PDF rasterisation.
+On Ubuntu you can install them with:
+
+```sh
+sudo apt update
+sudo apt install -y tesseract-ocr tesseract-ocr-eng poppler-utils
+```
+
+On Windows please install [Tesseract](https://github.com/tesseract-ocr/tesseract)
+and Poppler from their respective distributions and set the
+`TESSDATA_PREFIX` environment variable accordingly.
+
+### Running the pipeline
+
+The entry point for the pipeline is the `ocrmd` command.  To run the
+entire flow on a book described by a configuration file, execute:
+
+```sh
+ocrmd all -c configs/families_crisis.yaml
+```
+
+During development you can run individual stages:
+
+```sh
+# extract rasterised pages from the PDF
+ocrmd pdf -c configs/families_crisis.yaml
+
+# split composite scans into individual pages
+ocrmd split -c configs/families_crisis.yaml
+
+# perform OCR on a range of pages with custom options
+ocrmd ocr -c configs/families_crisis.yaml --from 1 --to 20 --tess-psm 4 --preprocess opencv --crop-pct 0.05
+
+# build the final Markdown
+ocrmd md -c configs/families_crisis.yaml
+```
+
+See the top level `configs/` directory for examples.  The `input/`
+directory is expected to contain your scanned PDF.  Output is
+written to `output/<slug>/`.
+
+## Continuous Integration
+
+A GitHub Actions workflow defined in `.github/workflows/ci.yml` performs
+linting, type checking and sample OCR as part of the CI pipeline.
+The workflow installs tesseract and poppler, installs the package in
+editable mode, runs `ruff`, `mypy` and `pytest`, and then processes the
+first configuration found in `configs/` if any.
+
+## License
+
+This project is provided for educational purposes and is not
+licensed for commercial use.  See the `LICENSE` file for details.

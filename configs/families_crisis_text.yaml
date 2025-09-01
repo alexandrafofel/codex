@@ -1,0 +1,18 @@
+book_title: Families Crisis and Caring (TEXT)
+pdf_file: input/families_crisis.pdf
+lang: eng
+dpi: 400
+
+# Text curat: fundal alb, fără imagini în MD
+preprocess: opencv          # CLAHE + threshold adaptiv + deskew
+tess_psm: 4                 # blocuri de text / coloane
+embed_images: none          # NU insera imagini în Markdown
+crop_pct: 0.00              # nu tăia marginile (evită să retezi titluri/footere)
+low_conf: 65                # sub 65 => considerăm pagina slabă (nu punem text)
+min_chars: 180              # sub 180 caractere => text junk (ignorăm)
+
+split_strategy:
+  - page: 1
+    type: single
+  - page: 2-300
+    type: double

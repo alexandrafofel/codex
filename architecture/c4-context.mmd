@@ -1,0 +1,19 @@
+flowchart TB
+  user["User"]
+  repo["Repo local / Workspace"]
+  pdf["PDF scanat<br/>input/*.pdf"]
+  ocrmd["OCR->Markdown Pipeline<br/>ocrmd CLI"]
+  tesseract["Tesseract OCR"]
+  pymupdf["PyMuPDF (fitz)"]
+  pdf2image["pdf2image + Poppler"]
+  fs["File System<br/>output/*"]
+  gha["GitHub Actions CI"]
+
+  user -->|"rulează comenzi"| ocrmd
+  pdf --> ocrmd
+  repo --> ocrmd
+  ocrmd -->|"extragere pagini"| pymupdf
+  ocrmd -->|"fallback rasterizare"| pdf2image
+  ocrmd -->|"OCR multi-PSM"| tesseract
+  ocrmd -->|"scrie rezultate + rapoarte"| fs
+  ocrmd -->|"artefacte & teste"| gha
