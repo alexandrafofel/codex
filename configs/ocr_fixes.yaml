@@ -1,0 +1,13 @@
+# Mapări post-OCR (generale + observate în carte). Poți edita oricând.
+replacements:
+  # corecții URL/Archive
+  "httn": "http"
+  "archive orn": "archive.org"
+  "Archive orn": "Archive.org"
+
+  # confuzii frecvente de litere / ligaturi
+  "Ctwo-": "to two-"
+  " cach ": " each "
+  " cach\n": " each\n"
+  "gr« yund": "ground"
+  "Gr« yund": "Ground"

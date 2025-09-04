@@ -37,7 +37,7 @@ class OcrResult:
 
 def _run_psm(img: Image.Image, lang: str, psm: int) -> Tuple[str, float, int, int]:
     """Run Tesseract for a single page segmentation mode and return metrics."""
-    config_str = f"--psm {psm}"
+    config_str = config_str = f'--psm {psm} --oem 1 -c load_system_dawg=1 -c load_freq_dawg=1'
     data = pytesseract.image_to_data(img, lang=lang, config=config_str, output_type=pytesseract.Output.DICT)
     # extract confidences excluding -1
     confs = [int(c) for c in data.get("conf", []) if c != "-1"]

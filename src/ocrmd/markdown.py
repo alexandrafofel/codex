@@ -8,6 +8,8 @@ the ``embed_images`` parameter in the configuration.
 """
 
 from __future__ import annotations
+from .preprocess import preprocess
+from PIL import Image
 
 import datetime as _dt
 from pathlib import Path
@@ -19,7 +21,39 @@ from .config import OcrConfig
 from .ocr import OcrResult, run_ocr
 from .preprocess import preprocess
 from .structure import detect_headings
+import re
+import re
+import yaml
+from pathlib import Path
 
+_REPL_CACHE: dict | None = None
+
+def _load_yaml_replacements(cfg) -> dict:
+    """Citește mapările din configs/ocr_fixes.yaml (dacă există) și le cache-uiește."""
+    global _REPL_CACHE
+    if _REPL_CACHE is not None:
+        return _REPL_CACHE
+    # caută lângă fișierul de config sau în ./configs
+    # dacă cfg are un atribut 'config_path', îl poți folosi; altfel mergem pe fallback
+    candidates = [
+        Path("configs/ocr_fixes.yaml"),
+        Path.cwd() / "configs" / "ocr_fixes.yaml",
+    ]
+    for p in candidates:
+        if p.exists():
+            data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            _REPL_CACHE = dict(data.get("replacements", {}))
+            return _REPL_CACHE
+    _REPL_CACHE = {}
+    return _REPL_CACHE
+
+def _apply_yaml_replacements(s: str, cfg) -> str:
+    repl = _load_yaml_replacements(cfg)
+    if not repl:
+        return s
+    for wrong, right in repl.items():
+        s = s.replace(wrong, right)
+    return s
 
 def _should_embed(page_idx: int, ocr_result: OcrResult, config: OcrConfig, total_pages: int) -> bool:
     """Decide whether to embed the original image for this page."""
@@ -111,3 +145,133 @@ def build_markdown(config: OcrConfig, pages: Iterable[Path], work_dir: Path) -> 
     md_content = "\n".join(lines)
     md_path.write_text(md_content, encoding="utf-8")
     return md_path
+
+# --- NEW/UPDATED helpers for slug and dirs ---
+from pathlib import Path
+from dataclasses import dataclass
+
+def _slug_from_cfg(cfg) -> str:
+    import re
+    title = (cfg.book_title or "").strip()
+    if title:
+        s = re.sub(r"[^a-zA-Z0-9]+", "_", title).strip("_").lower()
+        return s or "book"
+    return Path(cfg.pdf_file).stem
+
+def _ensure_dir(p: Path) -> None:
+    p.mkdir(parents=True, exist_ok=True)
+
+@dataclass
+class PageCtx:
+    index: int
+    img_path: Path
+    text: str
+    avg_conf: float
+    chars: int
+    split_tag: str = "1x1"
+
+def _allow_text(avg_conf: float, chars: int, cfg) -> bool:
+    return (avg_conf >= float(cfg.low_conf)) and (chars >= int(cfg.min_chars))
+
+def cleanup_text(text: str, cfg: ConfigType) -> str:
+    """Heuristici simple pentru erori OCR frecvente din carte."""
+    s = s.replace("\r\n", "\n").replace("\r", "\n")
+
+    # 1) De-hyphen: cuvânt spart la capăt de rând -> unește fără cratimă
+    # exemplu: "ground-\nbreaking" -> "ground-breaking"
+    s = re.sub(r"(\w+)-\n(\w+)", r"\1-\2", s)
+    # Uneori OCR pune spațiu în loc de newline
+    s = re.sub(r"(\w+)-\s+(\w+)", r"\1-\2", s)
+
+    # 2) Normalizări pentru ligaturi/artefacte cunoscute
+    # (poți extinde lista după ce mai vezi exemple)
+    fixes = {
+        "Ctwo-": "to two-",   # cazul raportat
+        "cach ": "each ",     # 'each' -> 'cach'
+        " cach": " each",
+        "gr« yund": "ground", # gr« yund -> ground
+        "Gr« yund": "Ground",
+        "httn": "http",       # URL din pagina 5
+        "archive orn": "archive.org",
+        "Archive orn": "Archive.org",
+    }
+    for wrong, right in fixes.items():
+        s = s.replace(wrong, right)
+
+    # 3) Spații duble / whitespace haotic
+    s = re.sub(r"[ \t]+", " ", s)
+    s = re.sub(r"\n{3,}", "\n\n", s)
+    s = _apply_yaml_replacements(s, cfg)  # aplică mapările configurabile din YAML
+    return s.strip()
+
+
+def render_text_only(cfg, pages: list[PageCtx], work_dir: Path) -> Path:
+    slug = _slug_from_cfg(cfg)
+    md_dir = work_dir / slug / "markdown"
+    _ensure_dir(md_dir)
+    out_md = md_dir / f"{slug}_TEXT.md"
+
+    lines = [f"# {cfg.book_title or slug}", ""]
+    lines.append(f"_lang={cfg.lang}, dpi={cfg.dpi}, preprocess={cfg.preprocess}, psm={cfg.tess_psm}_")
+    lines.append("")
+
+    for p in pages:
+        lines.append(f"## Page {p.index}")
+        if _allow_text(p.avg_conf, p.chars, cfg) and p.text.strip():
+            lines.append(cleanup_text(p.text, cfg))
+        else:
+            lines.append("_(no text – filtered by quality thresholds)_")
+        lines.append("")
+
+    out_md.write_text("\n".join(lines), encoding="utf-8")
+    return out_md
+
+def render_with_images(cfg, pages: list[PageCtx], work_dir: Path) -> Path:
+    import shutil
+    slug = _slug_from_cfg(cfg)
+    md_dir = work_dir / slug / "markdown"
+    img_dir = md_dir / "img"
+    _ensure_dir(md_dir)
+    _ensure_dir(img_dir)
+    out_md = md_dir / f"{slug}_IMAGES.md"
+
+    lines = [f"# {cfg.book_title or slug} — IMAGES", "", "_images-only export_", ""]
+
+    for p in pages:
+        lines.append(f"## Page {p.index}")
+        img_name = f"page_{p.index:03d}_{p.split_tag}.jpg"
+        dst = img_dir / img_name
+        try:
+            shutil.copyfile(p.img_path, dst)
+            lines.append(f"![page {p.index}](img/{img_name})")
+        except Exception as e:
+            lines.append(f"_image missing: {p.img_path} ({e})_")
+        lines.append("")
+
+    out_md.write_text("\n".join(lines), encoding="utf-8")
+    return out_md
+
+# --- UPDATE build_markdown to use new functions ---
+def build_markdown(cfg, page_paths: list[Path], work_dir: Path) -> Path:
+    from PIL import Image
+    from .ocr import run_ocr
+
+    pages: list[PageCtx] = []
+    for i, img_path in enumerate(sorted(page_paths), start=1):
+        if str(cfg.embed_images).lower() == "all":
+            pages.append(PageCtx(index=i, img_path=img_path, text="", avg_conf=0.0, chars=0))
+        else:
+            raw = Image.open(img_path)
+            img = preprocess(raw, cfg.preprocess, cfg.crop_pct)  # aplică profilul din YAML (pil_gray / opencv / etc.)
+            ocr_res = run_ocr(img, cfg)
+
+            pages.append(PageCtx(index=i, img_path=img_path, text=ocr_res.text,
+                                 avg_conf=ocr_res.avg_conf, chars=ocr_res.num_chars))
+
+    mode = str(cfg.embed_images).lower()
+    if mode == "all":
+        return render_with_images(cfg, pages, work_dir)
+    elif mode == "none":
+        return render_text_only(cfg, pages, work_dir)
+    else:
+        return render_text_only(cfg, pages, work_dir)
