@@ -173,35 +173,54 @@ class PageCtx:
 def _allow_text(avg_conf: float, chars: int, cfg) -> bool:
     return (avg_conf >= float(cfg.low_conf)) and (chars >= int(cfg.min_chars))
 
-def cleanup_text(text: str, cfg: ConfigType) -> str:
-    """Heuristici simple pentru erori OCR frecvente din carte."""
-    s = s.replace("\r\n", "\n").replace("\r", "\n")
+def cleanup_text(text: str, cfg) -> str:
+    """Heuristici simple pentru erori OCR frecvente + mapări din YAML."""
+    import re
 
-    # 1) De-hyphen: cuvânt spart la capăt de rând -> unește fără cratimă
-    # exemplu: "ground-\nbreaking" -> "ground-breaking"
-    s = re.sub(r"(\w+)-\n(\w+)", r"\1-\2", s)
-    # Uneori OCR pune spațiu în loc de newline
-    s = re.sub(r"(\w+)-\s+(\w+)", r"\1-\2", s)
+    s = text.replace("\r\n", "\n").replace("\r", "\n")
 
-    # 2) Normalizări pentru ligaturi/artefacte cunoscute
-    # (poți extinde lista după ce mai vezi exemple)
+    # 0) Normalize whitespace de bază
+    s = re.sub(r"[ \t]+", " ", s)
+
+    # 1) De-hyphen cross-line: "word-\nnext"
+    def _join_broken(m):
+        left, right = m.group(1), m.group(2)
+        if min(len(left), len(right)) <= 4:
+            return left + right   # expe-\nrience -> experience
+        return left + "-" + right # ground-\nbreaking -> ground-breaking
+    s = re.sub(r"([A-Za-z]{2,})-\n([A-Za-z]{2,})", _join_broken, s)
+
+    # 2) De-hyphen intra-line: "cul-tures" -> "cultures", păstrăm compusele lungi
+    def _dehyphen_intra(m):
+        left, right = m.group(1), m.group(2)
+        if min(len(left), len(right)) <= 4:
+            return left + right
+        return left + "-" + right
+    s = re.sub(r"([A-Za-z]{2,})-([A-Za-z]{2,})", _dehyphen_intra, s)
+
+    # 3) Elimină dublări de cuvinte scurte (to/in/of/for/and/the)
+    s = re.sub(r"\b(to|in|of|for|and|the)\s+\1\b", r"\1", s, flags=re.IGNORECASE)
+
+    # 4) (opțional) mici corecții generice observate frecvent
     fixes = {
-        "Ctwo-": "to two-",   # cazul raportat
-        "cach ": "each ",     # 'each' -> 'cach'
-        " cach": " each",
-        "gr« yund": "ground", # gr« yund -> ground
+        " Ctwo-": " to two-",
+        "Ctwo-": "to two-",
+        " cach ": " each ",
+        " cach\n": " each\n",
+        "gr« yund": "ground",
         "Gr« yund": "Ground",
-        "httn": "http",       # URL din pagina 5
+        "httn": "http",
         "archive orn": "archive.org",
         "Archive orn": "Archive.org",
     }
     for wrong, right in fixes.items():
         s = s.replace(wrong, right)
 
-    # 3) Spații duble / whitespace haotic
-    s = re.sub(r"[ \t]+", " ", s)
+    # 5) Aplică mapările configurabile din YAML (configs/ocr_fixes.yaml)
+    s = _apply_yaml_replacements(s, cfg)
+
+    # 6) Curățări finale
     s = re.sub(r"\n{3,}", "\n\n", s)
-    s = _apply_yaml_replacements(s, cfg)  # aplică mapările configurabile din YAML
     return s.strip()
 
 
